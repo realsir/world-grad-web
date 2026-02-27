@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>WORLD GRAD WEB</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#000;
+      --green: rgba(140,255,140,.95);
+      --line: rgba(140,255,140,.16);
+      --panel: rgba(8,10,8,.90);
+      --panelBorder: rgba(140,255,140,.28);
+      --shadow: 0 16px 60px rgba(0,0,0,.65);
+    }
+
+    html, body{
+      width:100%;
+      height:100%;
+      margin:0;
+      overflow:hidden;
+      background: var(--bg);
+      font-family: "Press Start 2P", system-ui, sans-serif;
+      image-rendering: pixelated;
+    }
+
+    #matrix{
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display:block;
+      z-index: 0;
+      background:#000;
+    }
+
+    #enter{
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 2;
+
+      display: inline-block;
+      padding: 14px 18px;
+      color: var(--green);
+      background: rgba(0,0,0,.22);
+      border: 1px solid rgba(140,255,140,.22);
+      cursor: pointer;
+      user-select: none;
+      text-decoration: none;
+      white-space: nowrap;
+
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 650ms ease, transform 650ms ease, filter 650ms ease;
+      text-shadow: 0 0 14px rgba(140,255,140,.15);
+      will-change: opacity, transform, filter;
+    }
+    #enter.show{ opacity: 1; pointer-events: auto; }
+    #enter.hide{
+      opacity: 0;
+      pointer-events: none;
+      filter: blur(6px);
+      transform: translate(-50%, -50%) scale(0.85);
+    }
+
+    #stage{
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+
+      opacity: 0;
+      transform: perspective(900px) translateZ(520px) scale(1.35);
+      filter: blur(2px);
+      transition:
+        opacity 900ms ease,
+        transform 1600ms cubic-bezier(.12,.92,.16,1),
+        filter 1600ms ease;
+      will-change: opacity, transform, filter;
+    }
+    #stage.active{
+      opacity: 1;
+      transform: perspective(900px) translateZ(0px) scale(1);
+      filter: blur(0px);
+      pointer-events: auto;
+    }
+
+    #webSvg{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+    }
+    .edge{
+      stroke: var(--line);
+      stroke-width: 2;
+      vector-effect: non-scaling-stroke;
+      shape-rendering: geometricPrecision;
+    }
+
+    #nodes{
+      position:absolute;
+      inset:0;
+      touch-action: none;
+    }
+
+    .node{
+      position:absolute;
+      width: 72px;
+      height: 72px;
+      border-radius: 999px;
+      border: 2px solid rgba(140,255,140,.72);
+      overflow:hidden;
+      background: #000;
+      box-shadow: 0 0 18px rgba(140,255,140,.14);
+      cursor: grab;
+
+      transform: translate3d(-50%, -50%, 0);
+      will-change: transform;
+      padding: 0;
+      contain: layout paint style;
+    }
+    .node:active{ cursor: grabbing; }
+
+    .node img{
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+      object-position: center;
+      border-radius: 999px;
+      transform: scale(1.08);
+      user-select:none;
+      -webkit-user-drag:none;
+      pointer-events: none;
+      background: #000;
+    }
+
+    .node.center{
+      width: 96px;
+      height: 96px;
+      border-width: 3px;
+      cursor: pointer;
+      box-shadow: 0 0 34px rgba(140,255,140,.18);
+    }
+    .node.center img{ transform: scale(1.03); }
+
+    #overlay{
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      display: none;
+      background: rgba(0,0,0,.58);
+      backdrop-filter: blur(5px);
+    }
+    #overlay.open{ display:block; }
+
+    #card{
+      position:absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(860px, calc(100% - 24px));
+      background: var(--panel);
+      border: 1px solid var(--panelBorder);
+      box-shadow: 0 0 0 2px rgba(140,255,140,.08), var(--shadow);
+      padding: 14px;
+      color: var(--green);
+    }
+
+    #cardTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    #close{
+      font: inherit;
+      color: var(--green);
+      background: transparent;
+      border: 1px solid var(--panelBorder);
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+
+    #cardBody{
+      display:grid;
+      grid-template-columns: 140px 1fr;
+      gap: 14px;
+      align-items:start;
+    }
+
+    #cardAvatarWrap{
+      width: 140px;
+      height: 140px;
+      border-radius: 999px;
+      border: 3px solid rgba(255,255,255,.6);
+      overflow:hidden;
+      background:#000;
+      box-shadow: 0 0 24px rgba(140,255,140,.10);
+    }
+    #cardAvatar{
+      width:100%;
+      height:100%;
+      display:block;
+      object-fit: cover;
+      border-radius: 999px;
+      transform: scale(1.06);
+      background:#000;
+    }
+
+    #cardTitle{
+      font-size: 12px;
+      line-height: 1.4;
+      text-transform: uppercase;
+      margin: 0 0 10px;
+    }
+    #cardTitle a{
+      color: rgba(200,255,200,.98);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(200,255,200,.25);
+    }
+    #cardTitle a:hover{
+      border-bottom-color: rgba(200,255,200,.65);
+    }
+
+    #cardText{
+      font-size: 11px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      color: rgba(140,255,140,.82);
+      margin: 0;
+    }
+
+    @media (max-width: 560px){
+      #cardBody{ grid-template-columns: 1fr; }
+      #cardAvatarWrap{ width: 120px; height: 120px; }
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="matrix"></canvas>
+
+  <a id="enter">./ WORLD GRAD WEB</a>
+
+  <div id="stage">
+    <svg id="webSvg"></svg>
+    <div id="nodes"></div>
+  </div>
+
+  <div id="overlay" role="dialog" aria-modal="true" aria-label="User card">
+    <div id="card">
+      <div id="cardTop">
+        <div></div>
+        <button id="close" type="button">Close</button>
+      </div>
+
+      <div id="cardBody">
+        <div id="cardAvatarWrap">
+          <img id="cardAvatar" alt="avatar" />
+        </div>
+        <div>
+          <h3 id="cardTitle"></h3>
+          <p id="cardText"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const TOP_SAFE = 64;
+    const BOTTOM_SAFE = 64;
+    const SIDE_SAFE = 18;
+
+    const DRAG_THRESHOLD_PX = 7;
+    const SUPPRESS_CLICK_MS = 260;
+
+    const CENTER_NODE_RADIUS = 48; 
+    const ORBIT_NODE_RADIUS  = 36; 
+    const CENTER_GAP         = 28; 
+    const CENTER_NO_GO = CENTER_NODE_RADIUS + ORBIT_NODE_RADIUS + CENTER_GAP;
+
+    const DPR_CAP = 1.5;
+    const MATRIX_FPS_NORMAL = 60;
+    const MATRIX_FPS_DURING_ENTER = 18;
+    const WEB_PHYSICS_ITERS = 2;
+
+    const PROFILES = {
+      0: {
+        name: "Gradient ./",
+        url: "https://x.com/Gradient_HQ",
+        desc:
+`Gradient is an AI R&D project building an “Open Intelligence Stack”: a fully decentralized infrastructure for training and serving (LLM) intelligence over the public internet, so that intelligence can be hosted, served, and owned by the community rather than centralized clouds.
+
+In Gradient’s stack you’ll find, among other components, Parallax (distributed serving), Echo (distributed reinforcement learning), and Gradient Cloud (enterprise solutions), with the core idea being to spread compute and model workloads across a distributed, peer-powered network.`,
+        ring: "#FFFFFF"
+      },
+
+      1: { name:"Vin ./", url:"https://x.com/VinoisAsian",
+        desc:"One of those “engines” of the Gradient community who doesn’t just sit in the chat, but actually gets things moving—organizing karaoke nights one moment and, the next, excitedly breaking down AI updates like Echo-2. BIG GRAD MAXI and BIIIIIIIG contributor ./",
+        ring:"#CD7F32" },
+
+      2: { name:"Hexx ./", url:"https://x.com/HexxRL",
+        desc:"Hexx is the “head of cigarettes dealing” and the “big boss” of the Gradient community. If you catch the vibe, his vibe is rich Hexx, an Aston Martin, and an endlessly wealthy mindset. A living legend walking among us. (luv luv and luv.)",
+        ring:"#8B5A2B" },
+
+      3: { name:"withoutname ./", url:"https://x.com/manuscripts666",
+        desc:"Legend and a gradient guru. RU-community luv’s and appreciates him.",
+        ring:"#3B82F6" },
+
+      4: { name:"realsir ./", url:"https://x.com/realsirandrew",
+        desc:"Another grad maxi, a.k.a. “community-dev-grad”. They built a big community hub that brings together lots of games and interactive websites.",
+        ring:"#A855F7" },
+
+      5: { name:"Leila ./", url:"https://x.com/Leila1113514",
+        desc:"Supor grad lady – a true lady of the world. Honestly don’t know another lady who loves Grad as much as Leila does. Total maxi and absolutely adored by the community (kisses).",
+        ring:"#FF5CA8" },
+
+      6: { name:"bog ./", url:"https://x.com/BogartAso",
+        desc:"This is the bog of Gradient and the bog of cats. They use ECHO-brand eye drops. meow meow.",
+        ring:"#FFD700" },
+
+      7: { name:"Pascal ./", url:"https://x.com/pascal2_22",
+        desc:"This guy lives in Gradient more than you can even imagine. He’s one of the most dedicated community members – everything community-related, he does at the highest level: running awesome events (like “Guess Words”), breaking down complex technical topics in simple language, and on top of that, he’s always fun to chat with in the general chat.",
+        ring:"#CD7F32" },
+
+      8: { name:"tes ./", url:"https://x.com/lless_tes",
+        desc:"My little friend from the RU-community – even though he joined quite recently, I can already see his huge potential.",
+        ring:"#FFFFFF" },
+
+      9: { name:"David ./", url:"https://x.com/davidz9",
+        desc:"One of the main admins and one of the people building Gradient. He’s working hard to shape the project’s future you may have even seen him at IRL events. (He loves ice cream.)",
+        ring:"#A7F3D0" },
+
+      10:{ name:"zfrm ./", url:"https://x.com/zfrmpro",
+        desc:"Young “grad-pig.” This guy has a great sense of humor and as my school teacher used to say: “If you don’t slack off, you’ll make it” (with love).",
+        ring:"#FFFFFF" },
+
+      11:{ name:"JE$$E ./", url:"https://x.com/jesse_dfp",
+        desc:"Major Gradient contributor who talks about Gradient every day in their threads and has a writing streak of 130+ days.",
+        ring:"#A855F7" },
+
+      12:{ name:"kozh ./", url:"https://x.com/Kozh_Crypto",
+        desc:"You can see him on the server every day – a writer with a distinctive style whose articles are genuinely interesting to read every time. guru guru.",
+        ring:"#3B82F6" },
+
+      13:{ name:"Wesaru ./", url:"https://x.com/WesaruKnows",
+        desc:"This is a Legend, this is a Star, this is 5Star — basically a Gradient Legend. Young and ambitious guy who brings valuable contributions to the community.",
+        ring:"#A855F7" },
+
+      14:{ name:"unicodefawn ./", url:"https://x.com/unicodef1wn",
+        desc:"They create really beautiful grad-style artwork. Huge potential and lots of ambition.",
+        ring:"#1E3A8A" },
+
+      15:{ name:"zefir ./", url:"https://x.com/zefironmaxi",
+        desc:"A driven guy who creates concise articles with high-quality infographics. (biiiiiig potential)",
+        ring:"#3B82F6" },
+
+      16:{ name:"asgore ./", url:"https://x.com/1Asgore1",
+        desc:"Young grad-lover and sigma boi who creates high-quality articles and art about grad (big luv)",
+        ring:"#FFFFFF" },
+
+      17:{ name:"Manlucky ./", url:"https://x.com/gokuoldskool",
+        desc:"This guy is a real big presence, and he brings huge value to the Gradient community by creating a cozy atmosphere, good vibes, and running all kinds of events. He loves Gradient and everything connected to it like no one else.",
+        ring:"#CD7F32" },
+
+      18:{ name:"midnight ./", url:"https://x.com/zkchrls",
+        desc:"BIG AND BIIIIIIIG GRAD LOVER. They adore Gradient, they adore the community, and they share tons of useful material about Gradient.",
+        ring:"#FF5CA8" },
+
+      19:{ name:"Dhruv ./", url:"https://x.com/Chupaa_mw",
+        desc:"Chipi-chipi, chapa-chapa Dubi-dubi, daba-daba Mágico mi dubi-dubi, boom, boom, boom",
+        ring:"#FFD700" },
+
+      20:{ name:"Boomin ./", url:"https://x.com/0xboomin",
+        desc:"Young Grad contributor. meow meow.",
+        ring:"#FFFFFF" },
+
+      21:{ name:"mirra ./", url:"https://x.com/6mirra6",
+        desc:"Hot guy doing cool things (huge potential).",
+        ring:"#FFFFFF" },
+
+      22:{ name:"Irina ./", url:"https://x.com/0xIrina",
+        desc:"Just Irina, just grad lady…",
+        ring:"#FFFFFF" },
+
+      23:{ name:"Hari ./", url:"https://x.com/SriHari93010192",
+        desc:"Small grad maxi but with huge potential and a bright future.",
+        ring:"#FFFFFF" },
+
+      24:{ name:"Tima ./", url:"https://x.com/koookiee765",
+        desc:"he’s young grad contributor. you can see them in the chat every day, and their articles…",
+        ring:"#FFFFFF" },
+
+      25:{ name:"Contrx ./", url:"https://x.com/contrx16",
+        desc:"Grad baby who adores Gradient — he joined quite a while ago, and you’ll see him here every single day. A great guy with a solid sense of humor.",
+        ring:"#FFD700" },
+
+      26:{ name:"j.mike ./", url:"https://x.com/miketwinks",
+        desc:"He’s the chief pirate and the crown jewel of the Gradient community. Thanks to him, the community has stylish banner’s & pfp’s. BIG GRAD STAR!",
+        ring:"#A855F7" },
+
+      27:{ name:"Mosssss ./", url:"https://x.com/AlloMoses69463",
+        desc:"Huge potential, daily presence, and spreading love — that’s what this guy is all about. (Big potential.)",
+        ring:"#EF4444" },
+
+      28:{ name:"Dylan ./", url:"https://x.com/sangdyl",
+        desc:"he's golden grad lover and funny boi.",
+        ring:"#EF4444" }
+    };
+
+    function getProfile(id){
+      return PROFILES[id] || { name:`User ${id} ./`, url:"#", desc:"", ring:"rgba(140,255,140,.72)" };
+    }
+
+    let stageActive = false;
+    let perfMode = 'idle'; 
+
+    const matrixCanvas = document.getElementById('matrix');
+    const mtx = matrixCanvas.getContext('2d', { alpha: true });
+
+    const chars = ['.', '/'];
+    let fontSize = 16;
+    let drops = [];
+    let matrixLastTs = 0;
+
+    function resizeMatrix(){
+      const dpr = Math.min(DPR_CAP, devicePixelRatio || 1);
+      matrixCanvas.width  = Math.floor(innerWidth * dpr);
+      matrixCanvas.height = Math.floor(innerHeight * dpr);
+      matrixCanvas.style.width = innerWidth + 'px';
+      matrixCanvas.style.height = innerHeight + 'px';
+      mtx.setTransform(dpr,0,0,dpr,0,0);
+
+      fontSize = Math.max(14, Math.round(innerWidth / 90));
+      const cols = Math.max(14, Math.floor(innerWidth / fontSize));
+      drops = new Array(cols).fill(0).map(() => Math.random() * innerHeight);
+    }
+
+    function drawMatrixFrame(){
+      mtx.fillStyle = 'rgba(0,0,0,0.10)';
+      mtx.fillRect(0,0,innerWidth,innerHeight);
+
+      mtx.fillStyle = 'rgba(140,255,140,0.9)';
+      mtx.font = `${fontSize}px "Press Start 2P", monospace`;
+
+      for(let i=0;i<drops.length;i++){
+        const x = i * fontSize;
+        const y = drops[i];
+        const ch = chars[(Math.random()*2)|0];
+        mtx.fillText(ch, x, y);
+
+        drops[i] += fontSize * (0.65 + Math.random()*0.95);
+        if (drops[i] > innerHeight + 60 && Math.random() > 0.975) drops[i] = -30;
+      }
+    }
+
+    function matrixLoop(ts){
+      const fps = (perfMode === 'entering') ? MATRIX_FPS_DURING_ENTER : MATRIX_FPS_NORMAL;
+      const minDt = 1000 / fps;
+
+      if(ts - matrixLastTs >= minDt){
+        matrixLastTs = ts;
+        drawMatrixFrame();
+      }
+      requestAnimationFrame(matrixLoop);
+    }
+
+    const enterBtn = document.getElementById('enter');
+    const stage = document.getElementById('stage');
+
+    setTimeout(() => enterBtn.classList.add('show'), 2000);
+
+    enterBtn.addEventListener('click', () => {
+      if (stageActive) return;
+
+      perfMode = 'entering';
+      enterBtn.classList.add('hide');
+
+      requestAnimationFrame(() => {
+        stage.classList.add('active');
+        stageActive = true;
+        setTimeout(() => { perfMode = 'inside'; }, 1700);
+      });
+    });
+
+    const overlay = document.getElementById('overlay');
+    const closeBtn = document.getElementById('close');
+    const cardAvatarWrap = document.getElementById('cardAvatarWrap');
+    const cardAvatar = document.getElementById('cardAvatar');
+    const cardTitle = document.getElementById('cardTitle');
+    const cardText = document.getElementById('cardText');
+
+    function openCard(id){
+      const p = getProfile(id);
+      cardAvatar.src = `grad-${id}.png`;
+      cardAvatar.alt = p.name;
+
+      cardAvatarWrap.style.borderColor = p.ring || "#fff";
+
+      const safeUrl = p.url || "#";
+      cardTitle.innerHTML = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(p.name)}</a>`;
+      cardText.textContent = p.desc || "";
+
+      overlay.classList.add('open');
+    }
+    function closeCard(){ overlay.classList.remove('open'); }
+
+    overlay.addEventListener('click', (e) => { if(e.target === overlay) closeCard(); });
+    closeBtn.addEventListener('click', closeCard);
+    addEventListener('keydown', (e) => { if(e.key === 'Escape') closeCard(); });
+
+    function escapeHtml(s){
+      return String(s)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    const nodesRoot = document.getElementById('nodes');
+    const svg = document.getElementById('webSvg');
+
+    const nodeEl = new Map();
+    const nodes = [];
+    const edgeList = [];
+    let rings = [];
+
+    const sim = {
+      cx: 0, cy: 0,
+      t0: performance.now(),
+      baseR: 120,
+      ringGap: 120,
+      speed: 0.22,
+      ySqueeze: 0.60
+    };
+
+    const clickGuard = { suppressUntil: 0 };
+    const drag = {
+      active: false,
+      pointerId: null,
+      id: null,
+      startX: 0,
+      startY: 0,
+      isDragging: false,
+      ox: 0,
+      oy: 0
+    };
+
+    function setWebGeometry(){
+      sim.cx = innerWidth / 2;
+      sim.cy = innerHeight / 2;
+
+      const minSide = Math.min(innerWidth, innerHeight);
+      sim.baseR = Math.max(110, minSide * 0.14);
+      sim.ringGap = Math.max(95, minSide * 0.12);
+
+      const aspect = innerWidth / Math.max(1, innerHeight);
+      sim.ySqueeze = Math.max(0.50, Math.min(0.68, 0.64 - (1/aspect - 0.6) * 0.10));
+    }
+
+    function addEdge(a, b){
+      const el = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      el.classList.add('edge');
+      svg.appendChild(el);
+      edgeList.push({a, b, el});
+    }
+
+    function splitIntoRings(userIds){
+      const n = userIds.length;
+      const out = [];
+      let idx = 0;
+
+      const r1 = Math.min(5, Math.max(4, 4 + (n % 2)));
+      const r2 = Math.min(6, Math.max(5, 5 + ((n >> 1) % 2)));
+
+      out.push(userIds.slice(idx, idx + r1)); idx += r1;
+      out.push(userIds.slice(idx, idx + r2)); idx += r2;
+
+      while(idx < n){
+        const remaining = n - idx;
+        if(remaining <= 7){
+          out.push(userIds.slice(idx));
+          idx = n;
+          break;
+        }
+        const size = 5 + ((idx + remaining) % 3);
+        out.push(userIds.slice(idx, idx + size));
+        idx += size;
+      }
+
+      const last = out[out.length - 1];
+      if(last.length < 6 && out.length >= 2){
+        for(let k = out.length - 2; k >= 0 && last.length < 6; k--){
+          const ring = out[k];
+          while(last.length < 6 && ring.length > 5) last.unshift(ring.pop());
+        }
+      }
+      return out;
+    }
+
+    function makeNode(id, isCenter){
+      const p = getProfile(id);
+
+      const b = document.createElement('button');
+      b.className = 'node' + (isCenter ? ' center' : '');
+      b.type = 'button';
+
+      b.style.borderColor = p.ring || "rgba(140,255,140,.72)";
+
+      const img = document.createElement('img');
+      img.alt = p.name;
+      img.src = `grad-${id}.png`;
+      b.appendChild(img);
+
+      if(!isCenter){
+        b.addEventListener('pointerdown', (ev) => {
+          b.setPointerCapture(ev.pointerId);
+          drag.active = true;
+          drag.pointerId = ev.pointerId;
+          drag.id = id;
+          drag.startX = ev.clientX;
+          drag.startY = ev.clientY;
+          drag.isDragging = false;
+
+          const node = nodes.find(n => n.id === id);
+          if(node){
+            drag.ox = node.x - ev.clientX;
+            drag.oy = node.y - ev.clientY;
+            node.vx *= 0.2; node.vy *= 0.2;
+          }
+          ev.preventDefault();
+        });
+
+        b.addEventListener('pointermove', (ev) => {
+          if(!drag.active || drag.pointerId !== ev.pointerId || drag.id !== id) return;
+
+          const moved = Math.hypot(ev.clientX - drag.startX, ev.clientY - drag.startY);
+          if(!drag.isDragging && moved >= DRAG_THRESHOLD_PX){
+            drag.isDragging = true;
+            clickGuard.suppressUntil = performance.now() + SUPPRESS_CLICK_MS;
+          }
+          if(!drag.isDragging) return;
+
+          const node = nodes.find(n => n.id === id);
+          if(!node) return;
+
+          const tx = ev.clientX + drag.ox;
+          const ty = ev.clientY + drag.oy;
+
+          node.dragged = true;
+          node.vx = (tx - node.x) * 0.35;
+          node.vy = (ty - node.y) * 0.35;
+          node.x = tx;
+          node.y = ty;
+
+          ev.preventDefault();
+        });
+
+        const endDrag = (ev) => {
+          if(!drag.active || drag.pointerId !== ev.pointerId || drag.id !== id) return;
+
+          try { b.releasePointerCapture(ev.pointerId); } catch(_) {}
+          const wasDragging = drag.isDragging;
+
+          drag.active = false;
+          drag.pointerId = null;
+          drag.id = null;
+          drag.isDragging = false;
+
+          const node = nodes.find(n => n.id === id);
+          if(node){
+            node.dragged = false;
+            node.vx *= 0.75; node.vy *= 0.75;
+          }
+
+          if(wasDragging){
+            clickGuard.suppressUntil = performance.now() + SUPPRESS_CLICK_MS;
+            ev.preventDefault();
+            ev.stopPropagation();
+          }
+        };
+
+        b.addEventListener('pointerup', endDrag);
+        b.addEventListener('pointercancel', endDrag);
+      }
+
+      b.addEventListener('click', (ev) => {
+        if(performance.now() < clickGuard.suppressUntil){
+          ev.preventDefault();
+          ev.stopPropagation();
+          return;
+        }
+        openCard(id);
+      });
+
+      nodesRoot.appendChild(b);
+      nodeEl.set(id, b);
+    }
+
+    function buildWeb(){
+      nodesRoot.innerHTML = '';
+      svg.innerHTML = '';
+      nodeEl.clear();
+      edgeList.length = 0;
+      nodes.length = 0;
+
+      makeNode(0, true);
+
+      const ids = [];
+      for(let i=1;i<=28;i++) ids.push(i);
+
+      ids.forEach(id => makeNode(id, false));
+      rings = splitIntoRings(ids);
+
+      for(let r = 0; r < rings.length; r++){
+        const ringIds = rings[r];
+        const ringR = sim.baseR + sim.ringGap * r;
+
+        for(let k = 0; k < ringIds.length; k++){
+          const id = ringIds[k];
+
+          const s1 = (Math.sin(id * 999) * 0.5 + 0.5);
+          const s2 = (Math.sin(id * 313) * 0.5 + 0.5);
+          const s3 = (Math.sin(id * 177) * 0.5 + 0.5);
+
+          const aBase = ringR * (1.02 + s1 * 0.10);
+          const bBase = ringR * sim.ySqueeze * (0.98 + s2 * 0.10);
+          const phase = (k / ringIds.length) * Math.PI * 2 + s2;
+          const omega = sim.speed * (0.75 + s3 * 0.55) * (1 - r*0.06);
+
+          nodes.push({
+            id,
+            ring: r,
+            aBase, bBase,
+            phase, omega,
+            wobA: 8 + 10 * s2,
+            wobB: 0.6 + 1.0 * s1,
+
+            x: sim.cx + Math.cos(phase) * aBase,
+            y: sim.cy + Math.sin(phase) * bBase,
+            vx: 0, vy: 0,
+
+            radius: ORBIT_NODE_RADIUS,
+            dragged: false
+          });
+        }
+      }
+
+      (rings[0] || []).forEach(id => addEdge(0, id));
+      for(let r = 1; r < rings.length; r++){
+        const cur = rings[r];
+        const prev = rings[r - 1];
+        for(let i = 0; i < cur.length; i++) addEdge(cur[i], prev[i % prev.length]);
+        for(let i = 0; i < cur.length; i += 3) addEdge(cur[i], prev[(i + 1) % prev.length]);
+      }
+    }
+
+    function solveCollisions(){
+      for(let i = 0; i < nodes.length; i++){
+        for(let j = i + 1; j < nodes.length; j++){
+          const a = nodes[i], b = nodes[j];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const dist2 = dx*dx + dy*dy;
+          const minD = a.radius + b.radius + 6;
+
+          if(dist2 === 0) continue;
+          if(dist2 < minD*minD){
+            const dist = Math.sqrt(dist2);
+            const nx = dx / dist;
+            const ny = dy / dist;
+            const overlap = (minD - dist);
+
+            const wa = a.dragged ? 0.10 : 0.5;
+            const wb = b.dragged ? 0.10 : 0.5;
+
+            a.x -= nx * overlap * wa;
+            a.y -= ny * overlap * wa;
+            b.x += nx * overlap * wb;
+            b.y += ny * overlap * wb;
+
+            const impulse = 0.22;
+            if(!a.dragged){ a.vx -= nx * impulse; a.vy -= ny * impulse; }
+            if(!b.dragged){ b.vx += nx * impulse; b.vy += ny * impulse; }
+          }
+        }
+      }
+    }
+
+    function solveWalls(){
+      const top = TOP_SAFE;
+      const bottom = innerHeight - BOTTOM_SAFE;
+      const left = SIDE_SAFE;
+      const right = innerWidth - SIDE_SAFE;
+
+      for(const p of nodes){
+        if(p.y - p.radius < top){
+          p.y = top + p.radius;
+          p.vy = Math.abs(p.vy) * 0.55;
+        } else if(p.y + p.radius > bottom){
+          p.y = bottom - p.radius;
+          p.vy = -Math.abs(p.vy) * 0.55;
+        }
+
+        if(p.x - p.radius < left){
+          p.x = left + p.radius;
+          p.vx = Math.abs(p.vx) * 0.55;
+        } else if(p.x + p.radius > right){
+          p.x = right - p.radius;
+          p.vx = -Math.abs(p.vx) * 0.55;
+        }
+      }
+    }
+
+    function solveCenterNoGo(cx, cy){
+      for(const p of nodes){
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+        const d = Math.hypot(dx, dy);
+        if(d === 0) continue;
+
+        if(d < CENTER_NO_GO){
+          const nx = dx / d;
+          const ny = dy / d;
+          const push = (CENTER_NO_GO - d);
+          p.x += nx * push;
+          p.y += ny * push;
+          p.vx += nx * 0.25;
+          p.vy += ny * 0.25;
+        }
+      }
+    }
+
+    function updateEdges(cx, cy){
+      const lookup = new Map();
+      lookup.set(0, {x: cx, y: cy});
+      for(const p of nodes) lookup.set(p.id, {x: p.x, y: p.y});
+
+      for(const e of edgeList){
+        const p1 = lookup.get(e.a);
+        const p2 = lookup.get(e.b);
+        if(!p1 || !p2) continue;
+        e.el.setAttribute('x1', p1.x);
+        e.el.setAttribute('y1', p1.y);
+        e.el.setAttribute('x2', p2.x);
+        e.el.setAttribute('y2', p2.y);
+      }
+    }
+
+    const pending = [];
+    function queue(el, x, y){
+      pending.push([el, x, y]);
+    }
+    function flush(){
+      for(const [el, x, y] of pending){
+        el.style.transform = `translate3d(${x}px, ${y}px, 0) translate3d(-50%, -50%, 0)`;
+      }
+      pending.length = 0;
+    }
+
+    function webLoop(now){
+      if(!stageActive){
+        requestAnimationFrame(webLoop);
+        return;
+      }
+
+      const t = (now - sim.t0) * 0.001;
+      svg.setAttribute('viewBox', `0 0 ${innerWidth} ${innerHeight}`);
+
+      const cx = sim.cx, cy = sim.cy;
+
+      const centerEl = nodeEl.get(0);
+      centerEl.style.transform = `translate3d(${cx}px, ${cy}px, 0) translate3d(-50%, -50%, 0)`;
+
+      for(const p of nodes){
+        if(p.dragged) continue;
+
+        const ang = p.phase + t * p.omega;
+        const breathe = 1 + Math.sin(t * 0.35 + p.ring) * 0.010;
+
+        const a = (p.aBase + Math.sin(t * p.wobB + p.id) * p.wobA) * breathe;
+        const b = (p.bBase + Math.cos(t * p.wobB + p.id) * p.wobA * 0.40) * breathe;
+
+        const tx = cx + Math.cos(ang) * a;
+        const ty = cy + Math.sin(ang) * b;
+
+        const k = 0.020;
+        const damp = 0.92;
+        p.vx = (p.vx + (tx - p.x) * k) * damp;
+        p.vy = (p.vy + (ty - p.y) * k) * damp;
+        p.x += p.vx;
+        p.y += p.vy;
+      }
+
+      for(let iter = 0; iter < WEB_PHYSICS_ITERS; iter++){
+        solveCollisions();
+        solveWalls();
+        solveCenterNoGo(cx, cy);
+      }
+
+      for(const p of nodes){
+        const el = nodeEl.get(p.id);
+        queue(el, p.x, p.y);
+      }
+      flush();
+
+      updateEdges(cx, cy);
+      requestAnimationFrame(webLoop);
+    }
+
+    function init(){
+      resizeMatrix();
+      setWebGeometry();
+      buildWeb();
+
+      requestAnimationFrame(matrixLoop);
+      requestAnimationFrame(webLoop);
+    }
+
+    addEventListener('resize', () => {
+      resizeMatrix();
+      setWebGeometry();
+      buildWeb();
+    });
+
+    init();
+  </script>
+</body>
+</html>
